@@ -136,6 +136,30 @@ module MutableOrderedGroupingBoundedQueueTests =
     open System.Collections.Generic
 
     [<Fact>]
+    [<Trait("category", "foo5")>]
+    let ``blah`` () : unit =
+        let maxValue  = 1000000L
+        let items = [1L..maxValue]
+        let rnd = new Random(1024)
+        let randomItems = items |> Seq.sortBy (fun _ -> rnd.Next(1000000)) |> Seq.cache
+
+        let tracker = new LastCompleteItemAgent2<int64>()
+
+        let tcs = new System.Threading.Tasks.TaskCompletionSource<bool>()
+
+        async {
+            for item in items do
+                do! tracker.Start(item)
+
+            for item in randomItems do
+                tracker.Complete(item)
+            
+            tracker.NotifyWhenComplete (maxValue, async { tcs.SetResult true })
+        } |> Async.RunSynchronously
+
+        tcs.Task.Wait()
+
+    [<Fact>]
     [<Trait("category", "foo3")>]
     let ``Can calculate correct values`` () : unit = 
         let queue = new MutableOrderedGroupingBoundedQueue<Guid, int>()
