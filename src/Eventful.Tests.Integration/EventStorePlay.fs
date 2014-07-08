@@ -4,13 +4,14 @@
         open Eventful
         open Xunit
         open EventStore.ClientAPI
-        open metrics
+        open Metrics
 
         type TestType = TestType
         [<Fact>]
         let ``Play eventstore events without queue`` () : unit = 
-            let eventsMeter = Metrics.Meter(typeof<TestType>, "event", "events", TimeUnit.Seconds)
-            Metrics.EnableConsoleReporting(10L, TimeUnit.Seconds)
+            let eventsMeter = Metric.Meter("event", Unit.None)
+            let reports = new Metrics.Reports.MetricsReports(new Metrics.Core.LocalRegistry(), (fun _ -> new HealthStatus()))
+            reports.WithConsoleReport(System.TimeSpan.FromSeconds(2.0)) |> ignore
             async {
                 printfn "Started"
                 let ipEndPoint = new System.Net.IPEndPoint(System.Net.IPAddress.Parse("127.0.0.1"), 1113)
@@ -40,8 +41,9 @@
 
         [<Fact>]
         let ``Read every stream as we run the events`` () : unit = 
-            let eventsMeter = Metrics.Meter(typeof<TestType>, "event", "events", TimeUnit.Seconds)
-            Metrics.EnableConsoleReporting(10L, TimeUnit.Seconds)
+            let eventsMeter = Metric.Meter("event", Unit.None)
+            let reports = new Metrics.Reports.MetricsReports(new Metrics.Core.LocalRegistry(), (fun _ -> new HealthStatus()))
+            reports.WithConsoleReport(System.TimeSpan.FromSeconds(2.0)) |> ignore
             async {
                 printfn "Started"
                 let ipEndPoint = new System.Net.IPEndPoint(System.Net.IPAddress.Parse("127.0.0.1"), 1113)
@@ -81,8 +83,9 @@
 
         [<Fact>]
         let ``Play eventstore events to null agent`` () : unit = 
-            let eventsMeter = Metrics.Meter(typeof<TestType>, "event", "events", TimeUnit.Seconds)
-            Metrics.EnableConsoleReporting(10L, TimeUnit.Seconds)
+            let eventsMeter = Metric.Meter("event", Unit.None)
+            let reports = new Metrics.Reports.MetricsReports(new Metrics.Core.LocalRegistry(), (fun _ -> new HealthStatus()))
+            reports.WithConsoleReport(System.TimeSpan.FromSeconds(2.0)) |> ignore
             async {
                 printfn "Started"
                 let ipEndPoint = new System.Net.IPEndPoint(System.Net.IPAddress.Parse("127.0.0.1"), 1113)
@@ -120,8 +123,9 @@
 
         [<Fact>]
         let ``Play eventstore events through work tracking queue`` () : unit = 
-            let eventsMeter = Metrics.Meter(typeof<TestType>, "event", "events", TimeUnit.Seconds)
-            Metrics.EnableConsoleReporting(10L, TimeUnit.Seconds)
+            let eventsMeter = Metric.Meter("event", Unit.None)
+            let reports = new Metrics.Reports.MetricsReports(new Metrics.Core.LocalRegistry(), (fun _ -> new HealthStatus()))
+            reports.WithConsoleReport(System.TimeSpan.FromSeconds(2.0)) |> ignore
 
             let getStreamId (recordedEvent : ResolvedEvent) =
                 recordedEvent.OriginalStreamId
@@ -136,7 +140,7 @@
                 return ()
             }
 
-            let queue = new WorktrackingQueue<string, ResolvedEvent>(Set.singleton << getStreamId, onItem, 100000,10000, onComplete)
+            let queue = new WorktrackingQueue<string, ResolvedEvent, ResolvedEvent>((fun i -> (i, (Set.singleton << getStreamId) i)), onItem, 100000,10000, onComplete)
 
             async {
                 printfn "Started"
@@ -176,8 +180,9 @@
 
         [<Fact>]
         let ``Play eventstore events through grouping queue`` () : unit = 
-            let eventsMeter = Metrics.Meter(typeof<TestType>, "event", "events", TimeUnit.Seconds)
-            Metrics.EnableConsoleReporting(10L, TimeUnit.Seconds)
+            let eventsMeter = Metric.Meter("event", Unit.None)
+            let reports = new Metrics.Reports.MetricsReports(new Metrics.Core.LocalRegistry(), (fun _ -> new HealthStatus()))
+            reports.WithConsoleReport(System.TimeSpan.FromSeconds(2.0)) |> ignore
 
             let queue = new GroupingBoundedQueue<string, RecordedEvent, unit>(100000)
 

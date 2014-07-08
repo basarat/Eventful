@@ -84,8 +84,19 @@ type ReportAddedEvent = {
     Name : string
 }
 
+type ChangeReportNameCommand = {
+    ReportId : ReportId
+    Name : string
+}
+
+type ReportNameChangedEvent = {
+    ReportId : ReportId
+    Name : string
+}
+
 type ReportEvents =
     | Added of ReportAddedEvent
+    | NameChanged of ReportNameChangedEvent
 
 module Report =
     let handlers =
@@ -97,7 +108,13 @@ module Report =
                            TeacherId = x.TeacherId
                            Name = x.Name } 
 
-                yield buildSimpleCmdHandler (StateBuilder.Empty ()) addReport
+                yield buildSimpleCmdHandler StateBuilder.NoState addReport
+
+                let changeName (x : ChangeReportNameCommand) =
+                    NameChanged { ReportId = x.ReportId
+                                  Name = x.Name }
+
+                yield buildSimpleCmdHandler StateBuilder.NoState changeName
             }
 
 type TeacherReportEvents =
@@ -119,15 +136,13 @@ open Eventful.Testing
 open Eventful.Testing.TestHelpers
 
 module TeacherTests = 
-    let settings = { 
-        GetStreamName = fun () aggregate -> sprintf "%A-%A" "test" aggregate
-    }
+    let teacherHandlers =
+        EventfulHandlers.empty
+        |> EventfulHandlers.addAggregate Teacher.handlers
+        |> EventfulHandlers.addAggregate Report.handlers 
+        |> EventfulHandlers.addAggregate TeacherReport.handlers 
 
-    let newTestSystem () =
-        TestSystem<_>.Empty settings
-        |> (fun x -> x.AddAggregate Teacher.handlers)
-        |> (fun x -> x.AddAggregate Report.handlers)
-        |> (fun x -> x.AddAggregate TeacherReport.handlers)
+    let newTestSystem = TestSystem.Empty teacherHandlers
 
     [<Fact>]
     let ``Given empty When Add Teacher Then TeacherAddedEvent is produced`` () : unit =
@@ -140,7 +155,7 @@ module TeacherTests =
         }
 
         let result = 
-            newTestSystem()
+            newTestSystem
             |> TestSystem.runCommand command
 
         let expectedEvent : TeacherAddedEvent -> bool = function
@@ -165,7 +180,7 @@ module TeacherTests =
         }
 
         let result = 
-            newTestSystem()
+            newTestSystem
             |> TestSystem.runCommand command
             |> TestSystem.runCommand command // run a second time - oops
              
@@ -189,7 +204,7 @@ module TeacherTests =
             LastName = ""
         }
 
-        let result = newTestSystem().RunCommand command
+        let result = newTestSystem.RunCommand command
 
         result.LastResult |> should containError "FirstName must not be blank"
         result.LastResult |> should containError "LastName must not be blank"
@@ -200,7 +215,7 @@ module TeacherTests =
         let reportId =  { ReportId.Id = Guid.NewGuid() }
         
         let result = 
-            newTestSystem().Run 
+            newTestSystem.Run 
                 [{
                     AddTeacherCommand.TeacherId = teacherId
                     FirstName = "Andrew"
@@ -214,7 +229,39 @@ module TeacherTests =
             StateBuilder.Empty 0
             |> StateBuilder.addHandler (fun s (e:ReportAddedEvent) -> s + 1)
 
-        let stream = sprintf "%s-%A" (settings.GetStreamName () (AggregateType.Report :> obj)) (reportId :> IIdentity)
+        let stream = sprintf "%s-%s" (AggregateType.Report.ToString()) ((reportId :> IIdentity).GetId)
         let state = result.EvaluateState stream stateBuilder
 
         state |> should equal 1
+
+    [<Fact(Skip = "Failing test for future work")>]
+    let ``Given Report added When Name changed Then State reflects new name`` () : unit =
+        let teacherId =  { TeacherId.Id = Guid.NewGuid() }
+        let reportId =  { ReportId.Id = Guid.NewGuid() }
+        
+        let result = 
+            newTestSystem.Run 
+                [{
+                    AddReportCommand.ReportId = reportId
+                    TeacherId = teacherId
+                    Name = "Test Report" }]
+
+        let stateBuilder = 
+            StateBuilder.Empty None
+            |> StateBuilder.addHandler (fun s (e:ReportAddedEvent) -> Some e.Name)
+            |> StateBuilder.addHandler (fun s (e:ReportNameChangedEvent) -> Some e.Name)
+
+        let stream = sprintf "%s-%s" (AggregateType.Report.ToString()) ((reportId :> IIdentity).GetId)
+        let state = result.EvaluateState stream stateBuilder
+
+        state |> should equal (Some "Test Report")
+
+        let result' = 
+            result.Run 
+                [{
+                    ChangeReportNameCommand.ReportId = reportId
+                    Name = "New Name" }]
+
+        let state' = result.EvaluateState stream stateBuilder
+
+        state' |> should equal (Some "New Name")
