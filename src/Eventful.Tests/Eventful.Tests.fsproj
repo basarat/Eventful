@@ -73,6 +73,7 @@
     <Compile Include="CounterAgent.fs" />
     <Compile Include="BoundedWorkQueueTests.fs" />
     <Compile Include="OrderedGroupingQueueTests.fs" />
+    <Compile Include="MutableOrderedGroupingQueue.fs" />
     <Compile Include="GroupingBoundedQueueStateTests.fs" />
     <Compile Include="GroupingBoundedQueueTests.fs" />
     <Compile Include="WorktrackingQueueTests.fs" />
