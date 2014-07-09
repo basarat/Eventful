@@ -137,7 +137,7 @@ module MutableOrderedGroupingBoundedQueueTests =
 
     [<Fact>]
     [<Trait("category", "foo5")>]
-    let ``blah`` () : unit =
+    let ``speed test for 1 million items to tracker`` () : unit =
         let maxValue  = 1000000L
         let items = [1L..maxValue]
         let rnd = new Random(1024)
@@ -160,12 +160,36 @@ module MutableOrderedGroupingBoundedQueueTests =
         tcs.Task.Wait()
 
     [<Fact>]
+    [<Trait("category", "foo5")>]
+    let ``speed test for 1 million items to empty agent`` () : unit =
+        let maxValue  = 1000000L
+        let items = [1L..maxValue]
+        let rnd = new Random(1024)
+        let randomItems = items |> Seq.sortBy (fun _ -> rnd.Next(1000000)) |> Seq.cache
+
+        let agent = Agent.Start(fun agent -> 
+            let rec loop () = async {
+                let! (msg : AsyncReplyChannel<unit>) = agent.Receive()
+                msg.Reply() 
+                return! loop ()}
+            loop ()) 
+
+        async {
+            for item in items do
+                do! agent.PostAndAsyncReply(fun ch -> ch)
+
+            for item in randomItems do
+                do! agent.PostAndAsyncReply(fun ch -> ch)
+            
+        } |> Async.RunSynchronously
+
+    [<Fact>]
     [<Trait("category", "foo3")>]
     let ``Can calculate correct values`` () : unit = 
         let queue = new MutableOrderedGroupingBoundedQueue<Guid, int>()
         let store = new System.Collections.Generic.Dictionary<Guid, int>()
         let monitor = new Object()
-        let items = TestEventStream.sequentialValues 1000 100
+        let items = TestEventStream.sequentialValues 10000 100
 
         let accumulator s a =
             if(a % 2 = 0) then
@@ -201,7 +225,7 @@ module MutableOrderedGroupingBoundedQueueTests =
             for (eventPosition, key, value) in items do
                 do! queue.Add(value, (fun v -> Seq.singleton (value, key)))
             do! queue.CurrentItemsComplete()
-            Assert.Equal(1000, store.Count)
+            Assert.Equal(10000, store.Count)
             for pair in store do
                 Assert.Equal(50, pair.Value)
         } |> Async.RunSynchronously

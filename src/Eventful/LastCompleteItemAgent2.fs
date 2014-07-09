@@ -28,6 +28,7 @@ type LastCompleteItemAgent2<'TItem when 'TItem : comparison> () =
     let completed = new System.Collections.Generic.SortedSet<'TItem>()
     let notifications = new System.Collections.Generic.SortedSet<NotificationItem<'TItem>>()
 
+    let mutable nextToComplete = None
     let mutable currentLastComplete = None
 
     // remove matching head sequences from xs and ys
@@ -63,20 +64,31 @@ type LastCompleteItemAgent2<'TItem when 'TItem : comparison> () =
             | Start (item, reply) ->
                 reply.Reply()
                 started.Add(item) |> ignore
+                
+                match nextToComplete with
+                | Some next when next > item ->
+                    nextToComplete <- Some item
+                | None ->
+                    nextToComplete <- Some item
+                | _ -> ()
+
                 return! loop state
             | Complete item ->
                 completed.Add(item) |> ignore
 
-                let lastComplete' = removeMatchingHeads started completed
+                if Some item = nextToComplete then
+                    let lastComplete' = removeMatchingHeads started completed
 
-                currentLastComplete <-
-                    match lastComplete' with
-                    | Some x -> Some x
-                    | None -> currentLastComplete
-                
-                match currentLastComplete with
-                | Some x -> do! checkNotifications x
-                | None -> ()
+                    currentLastComplete <-
+                        match lastComplete' with
+                        | Some x -> Some x
+                        | None -> currentLastComplete
+                    
+                    match currentLastComplete with
+                    | Some x -> do! checkNotifications x
+                    | None -> ()
+
+                    nextToComplete <- (started |> Seq.tryHead)
 
                 return! loop state
             | LastComplete reply ->
